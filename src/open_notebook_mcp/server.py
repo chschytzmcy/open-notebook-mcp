@@ -436,38 +436,48 @@ async def make_request(
     endpoint: str,
     *,
     json_data: Optional[dict[str, Any]] = None,
+    form_data: Optional[dict[str, Any]] = None,
     params: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     """Make an HTTP request to the Open Notebook API.
-    
+
     Args:
         method: HTTP method (GET, POST, PUT, DELETE)
         endpoint: API endpoint path (e.g., '/api/notebooks')
         json_data: Optional JSON body for POST/PUT requests
+        form_data: Optional form data for POST/PUT requests (multipart)
         params: Optional query parameters
-    
+
     Returns:
         Response JSON as dictionary
-    
+
     Raises:
         Exception: If request fails with formatted error message
     """
     base_url = get_base_url()
     url = f"{base_url}{endpoint}"
-    
-    headers = {"Content-Type": "application/json"}
+
+    headers = {}
     auth_token = get_auth_token()
     if auth_token:
         headers["Authorization"] = f"Bearer {auth_token}"
-    
+
     async with httpx.AsyncClient(follow_redirects=True, timeout=DEFAULT_TIMEOUT_S) as client:
         try:
             if method == "GET":
                 r = await client.get(url, headers=headers, params=params)
             elif method == "POST":
-                r = await client.post(url, headers=headers, json=json_data, params=params)
+                if form_data is not None:
+                    r = await client.post(url, headers=headers, data=form_data, params=params)
+                else:
+                    headers["Content-Type"] = "application/json"
+                    r = await client.post(url, headers=headers, json=json_data, params=params)
             elif method == "PUT":
-                r = await client.put(url, headers=headers, json=json_data, params=params)
+                if form_data is not None:
+                    r = await client.put(url, headers=headers, data=form_data, params=params)
+                else:
+                    headers["Content-Type"] = "application/json"
+                    r = await client.put(url, headers=headers, json=json_data, params=params)
             elif method == "DELETE":
                 r = await client.delete(url, headers=headers, params=params)
             else:
@@ -697,7 +707,7 @@ async def create_source(
         data["url"] = url
     if title is not None:
         data["title"] = title
-    
+
     source = await make_request("POST", "/api/sources", json_data=data)
     return {
         "request_id": generate_request_id(),
